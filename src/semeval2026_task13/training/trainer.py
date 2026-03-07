@@ -111,6 +111,16 @@ def build_trainer(
     """
     training_args = build_training_arguments(config)
 
+    # Convert warmup_ratio -> warmup_steps to avoid deprecation warnings.
+    steps_per_epoch = max(
+        1,
+        (len(train_ds) // config.per_device_train_batch_size)
+        // max(1, config.gradient_accumulation_steps),
+    )
+    total_steps = max(1, int(steps_per_epoch * config.num_train_epochs))
+    training_args.warmup_steps = int(total_steps * config.warmup_ratio)
+    training_args.warmup_ratio = 0.0
+
     return Trainer(
         model=model,
         args=training_args,

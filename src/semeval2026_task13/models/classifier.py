@@ -12,6 +12,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
 )
+from transformers.models.roberta.modeling_roberta import RobertaClassificationHead
 
 from semeval2026_task13.utils.config import ExperimentConfig
 
@@ -88,11 +89,18 @@ def build_model(config: ExperimentConfig) -> PreTrainedModel:
             )
 
     # --- base model -------------------------------------------------------
+    load_kwargs: dict = {
+        "num_labels": config.num_labels,
+        "problem_type": "single_label_classification",
+        "quantization_config": bnb_config,
+    }
+    if bnb_config is not None:
+        # Ensures quantized modules are placed on GPU and bnb state is initialized.
+        load_kwargs["device_map"] = "auto"
+
     model = AutoModelForSequenceClassification.from_pretrained(
         config.model_name,
-        num_labels=config.num_labels,
-        problem_type="single_label_classification",
-        quantization_config=bnb_config,
+        **load_kwargs,
     )
 
     n_params = sum(p.numel() for p in model.parameters())
@@ -105,6 +113,13 @@ def build_model(config: ExperimentConfig) -> PreTrainedModel:
 
     # --- prepare for quantized training -----------------------------------
     if bnb_config is not None:
+        # For RoBERTa classifiers, wrapping a 4-bit classification head with
+        # PEFT modules_to_save can trigger bitsandbytes assertion errors.
+        # Replace it with a standard fp32 head to keep training stable.
+        if getattr(model.config, "model_type", "") == "roberta" and hasattr(model, "classifier"):
+            model.classifier = RobertaClassificationHead(model.config).to(model.device)
+            logger.info("Replaced quantized classifier head with fp32 head for PEFT compatibility")
+
         model = prepare_model_for_kbit_training(
             model,
             use_gradient_checkpointing=config.gradient_checkpointing,
