@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
+import sys
 
 import datasets as hf_datasets
 import numpy as np
@@ -26,6 +27,29 @@ from semeval2026_task13.utils.submission import generate_submission
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("transformers").setLevel(logging.WARNING)
 logging.getLogger("datasets").setLevel(logging.WARNING)
+
+
+def setup_logging(task_name: str) -> Path:
+    """Configure console + file logging and return log path."""
+    log_dir = Path("logs") / task_name
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "predict.log"
+
+    logger.remove()
+    logger.add(
+        sys.stdout,
+        level="INFO",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    logger.add(
+        log_path,
+        level="INFO",
+        rotation="10 MB",
+        retention=5,
+        enqueue=True,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    return log_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,8 +74,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Entry point: load checkpoint → predict test set → write CSV."""
+    """Entry point: load checkpoint -> predict test set -> write CSV."""
     args = parse_args()
+    log_path = setup_logging(args.task)
+    logger.info("Logging to {}", log_path)
 
     device = get_device()
     logger.info("Selected device: {}", device)
@@ -72,7 +98,7 @@ def main() -> None:
 
     output_path = args.output or f"artifacts/{args.task}/submission.csv"
 
-    # Load model & tokenizer from checkpoint
+    # Load model & tokenizer from merged checkpoint
     logger.info("Loading checkpoint: {}", args.checkpoint)
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
     model = AutoModelForSequenceClassification.from_pretrained(args.checkpoint)

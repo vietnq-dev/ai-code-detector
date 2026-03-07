@@ -30,6 +30,13 @@ class ExperimentConfig:
         gradient_accumulation_steps: Gradient accumulation steps.
         fp16: Whether to use mixed-precision training.
         seed: Global random seed.
+        use_lora: Enable LoRA adapters for parameter-efficient fine-tuning.
+        lora_r: LoRA rank.
+        lora_alpha: LoRA scaling factor.
+        lora_dropout: Dropout in LoRA layers.
+        quantize_4bit: Load base model in 4-bit (CUDA only, skipped elsewhere).
+        gradient_checkpointing: Trade compute for memory by checkpointing
+            activations.
         output_dir: Root directory for checkpoints.
         log_dir: Root directory for TensorBoard / training logs.
     """
@@ -53,6 +60,14 @@ class ExperimentConfig:
     gradient_accumulation_steps: int = 1
     fp16: bool = True
     seed: int = 42
+
+    # Memory optimisation
+    use_lora: bool = True
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    quantize_4bit: bool = True
+    gradient_checkpointing: bool = True
 
     # Output paths
     output_dir: str = "checkpoints"

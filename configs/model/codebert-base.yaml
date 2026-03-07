@@ -11,3 +11,11 @@ warmup_ratio: 0.1
 gradient_accumulation_steps: 1
 fp16: true
 seed: 42
+
+# Memory optimisation — LoRA + quantization + gradient checkpointing
+use_lora: true
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+quantize_4bit: true
+gradient_checkpointing: true

@@ -43,7 +43,8 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
     """Translate an ``ExperimentConfig`` into HF ``TrainingArguments``.
 
     Automatically selects the correct mixed-precision setting based on
-    the available accelerator (CUDA → fp16, MPS / CPU → disabled).
+    the available accelerator (CUDA -> fp16, MPS / CPU -> disabled) and
+    enables gradient checkpointing when requested.
 
     Args:
         config: Merged experiment configuration.
@@ -54,6 +55,8 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
     output_dir = Path(config.output_dir) / config.task_name
     log_dir = Path(config.log_dir) / config.task_name
     precision = _resolve_precision(config.fp16)
+
+    gc_kwargs = {"use_reentrant": False} if config.gradient_checkpointing else None
 
     return TrainingArguments(
         output_dir=str(output_dir),
@@ -71,6 +74,9 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
         fp16=precision["fp16"],
         bf16=precision["bf16"],
         seed=config.seed,
+        # Memory
+        gradient_checkpointing=config.gradient_checkpointing,
+        gradient_checkpointing_kwargs=gc_kwargs,
         # Evaluation & checkpointing
         eval_strategy="epoch",
         save_strategy="epoch",
@@ -94,7 +100,7 @@ def build_trainer(
     """Build a ready-to-run HF ``Trainer``.
 
     Args:
-        model: Classification model.
+        model: Classification model (may be a PEFT wrapper).
         tokenizer: Tokenizer (saved alongside the model).
         train_ds: Tokenized training split.
         eval_ds: Tokenized validation split.
