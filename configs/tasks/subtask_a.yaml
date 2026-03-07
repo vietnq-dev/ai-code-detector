@@ -1,0 +1,9 @@
+task_name: subtask_a
+num_labels: 2
+data_dir: data/task_a
+
+train_languages:
+  - cpp
+  - python
+  - java
+train_domain: algorithmic

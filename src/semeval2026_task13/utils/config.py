@@ -1,0 +1,94 @@
+"""Experiment configuration loaded from YAML files."""
+
+from __future__ import annotations
+
+import dataclasses
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+from loguru import logger
+
+
+@dataclass
+class ExperimentConfig:
+    """Unified configuration merging model and task YAML settings.
+
+    Attributes:
+        model_name: HuggingFace model identifier.
+        max_length: Maximum tokenizer sequence length.
+        task_name: Subtask identifier (subtask_a / subtask_b / subtask_c).
+        num_labels: Number of classification labels.
+        data_dir: Directory containing train/test parquet files.
+        learning_rate: AdamW learning rate.
+        per_device_train_batch_size: Training batch size per device.
+        per_device_eval_batch_size: Evaluation batch size per device.
+        num_train_epochs: Total training epochs.
+        weight_decay: AdamW weight decay.
+        warmup_ratio: Fraction of steps for LR warmup.
+        gradient_accumulation_steps: Gradient accumulation steps.
+        fp16: Whether to use mixed-precision training.
+        seed: Global random seed.
+        output_dir: Root directory for checkpoints.
+        log_dir: Root directory for TensorBoard / training logs.
+    """
+
+    # Model
+    model_name: str = "microsoft/codebert-base"
+    max_length: int = 512
+
+    # Task
+    task_name: str = "subtask_a"
+    num_labels: int = 2
+    data_dir: str = "data/task_a"
+
+    # Training hyper-parameters
+    learning_rate: float = 2e-5
+    per_device_train_batch_size: int = 16
+    per_device_eval_batch_size: int = 32
+    num_train_epochs: int = 5
+    weight_decay: float = 0.01
+    warmup_ratio: float = 0.1
+    gradient_accumulation_steps: int = 1
+    fp16: bool = True
+    seed: int = 42
+
+    # Output paths
+    output_dir: str = "checkpoints"
+    log_dir: str = "logs"
+
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_yaml(
+        cls,
+        model_config_path: str | Path,
+        task_config_path: str | Path,
+        **overrides: Any,
+    ) -> ExperimentConfig:
+        """Create config by merging a model YAML, a task YAML, and CLI overrides.
+
+        Args:
+            model_config_path: Path to the model YAML file.
+            task_config_path: Path to the task YAML file.
+            **overrides: Keyword arguments that take highest priority.
+
+        Returns:
+            A fully-resolved ``ExperimentConfig`` instance.
+        """
+        merged: dict[str, Any] = {}
+
+        for path in (model_config_path, task_config_path):
+            with open(path) as fh:
+                data = yaml.safe_load(fh) or {}
+            merged.update(data)
+
+        merged.update({k: v for k, v in overrides.items() if v is not None})
+
+        valid_fields = {f.name for f in dataclasses.fields(cls)}
+        filtered = {k: v for k, v in merged.items() if k in valid_fields}
+
+        config = cls(**filtered)
+        logger.info("Loaded config: {}", config)
+        return config

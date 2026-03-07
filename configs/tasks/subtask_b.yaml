@@ -1,0 +1,16 @@
+task_name: subtask_b
+num_labels: 11
+data_dir: data/task_b
+
+classes:
+  - human
+  - deepseek-ai
+  - qwen
+  - 01-ai
+  - bigcode
+  - gemma
+  - phi
+  - meta-llama
+  - ibm-granite
+  - mistral
+  - openai

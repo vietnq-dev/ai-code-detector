@@ -1,0 +1,9 @@
+task_name: subtask_c
+num_labels: 4
+data_dir: data/task_c
+
+classes:
+  - human
+  - machine_generated
+  - hybrid
+  - adversarial
