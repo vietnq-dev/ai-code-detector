@@ -1,3 +1,5 @@
+- **9 Mar**: Download fine-tuned checkpoint (CodeBERT) [here](https://drive.google.com/drive/folders/1wKwwgXW_pC65XJOlL_ogSyxP1Sr9cI26?usp=sharing) (0.34 on leaderboard test).
+
 # SemEval-2026 Task 13 — Detecting Machine-Generated Code
 
 Fine-tune `microsoft/codebert-base` for  Subtask A
