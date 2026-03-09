@@ -128,7 +128,6 @@ def tokenize_dataset(
     def _tokenize(examples: dict[str, Any]) -> dict[str, Any]:
         return tokenizer(
             examples[code_column],
-            padding="max_length",
             truncation=True,
             max_length=max_length,
         )

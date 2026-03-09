@@ -18,7 +18,15 @@ uv sync
 
 ## 2) Data
 
+Download data:
+
+```
+curl -L -o semeval-2026-task13.zip\
+  https://www.kaggle.com/api/v1/datasets/download/daniilor/semeval-2026-task13
+```
+
 Place official `.parquet` files under `data/task_<x>/`.
+
 The loader auto-discovers files by keyword (`train`, `validation`, `test`)
 so the organiser naming convention works out of the box:
 
@@ -49,18 +57,6 @@ uv run python train.py --task subtask_b
 uv run python train.py --task subtask_c
 ```
 
-### Common overrides
-
-```bash
-uv run python train.py --task subtask_a \
-    --epochs 10 \
-    --batch-size 8 \
-    --lr 3e-5 \
-    --max-length 256 \
-    --grad-accum 2 \
-    --no-fp16
-```
-
 Checkpoints are saved to `checkpoints/<task>/` (best model in
 `checkpoints/<task>/best/`).
 
@@ -68,8 +64,10 @@ Checkpoints are saved to `checkpoints/<task>/` (best model in
 
 ```bash
 uv run python predict.py \
-    --task subtask_a \
-    --checkpoint checkpoints/subtask_a/best
+  --task subtask_a \
+  --checkpoint checkpoints/subtask_a/best \
+  --test-file data/task_a/task_a_test.parquet \
+  --output artifacts/subtask_a/submission.csv
 ```
 
 Writes `artifacts/subtask_a/submission.csv` with columns `id,label`.
@@ -116,9 +114,3 @@ uv run python predict.py \
 ├── artifacts/                  # Submission CSVs
 └── logs/                       # Training logs
 ```
-
-## 6) Evaluation
-
-All subtasks use **macro F1** as the official metric.
-The scorer provided by the organizers (`scorer.py`) can be run on
-any submission CSV to verify results locally.

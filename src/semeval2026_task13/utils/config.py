@@ -37,13 +37,17 @@ class ExperimentConfig:
         quantize_4bit: Load base model in 4-bit (CUDA only, skipped elsewhere).
         gradient_checkpointing: Trade compute for memory by checkpointing
             activations.
+        dataloader_num_workers: Number of worker processes for data loading.
+        dataloader_pin_memory: Whether to pin CPU memory for faster GPU transfer.
+        group_by_length: Whether to bucket samples by sequence length to
+            reduce padding waste.
         output_dir: Root directory for checkpoints.
         log_dir: Root directory for TensorBoard / training logs.
     """
 
     # Model
     model_name: str = "microsoft/codebert-base"
-    max_length: int = 512
+    max_length: int = 256
 
     # Task
     task_name: str = "subtask_a"
@@ -52,7 +56,7 @@ class ExperimentConfig:
 
     # Training hyper-parameters
     learning_rate: float = 2e-5
-    per_device_train_batch_size: int = 16
+    per_device_train_batch_size: int = 64
     per_device_eval_batch_size: int = 32
     num_train_epochs: int = 5
     weight_decay: float = 0.01
@@ -66,8 +70,13 @@ class ExperimentConfig:
     lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
-    quantize_4bit: bool = True
-    gradient_checkpointing: bool = True
+    quantize_4bit: bool = False
+    gradient_checkpointing: bool = False
+
+    # Data loading
+    dataloader_num_workers: int = 4
+    dataloader_pin_memory: bool = True
+    group_by_length: bool = True
 
     # Output paths
     output_dir: str = "checkpoints"

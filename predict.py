@@ -10,13 +10,15 @@ import sys
 
 import datasets as hf_datasets
 import numpy as np
+import torch
 import yaml
 from loguru import logger
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
-    Trainer,
-    TrainingArguments,
+    DataCollatorWithPadding,
 )
 
 from semeval2026_task13.data.dataset import load_parquet, tokenize_dataset
@@ -69,7 +71,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-dir", default=None, help="Directory containing test.parquet.")
     p.add_argument("--output", default=None, help="Output CSV path.")
     p.add_argument("--max-length", type=int, default=512)
-    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--batch-size", type=int, default=512)
+    p.add_argument("--num-workers", type=int, default=4, help="DataLoader worker processes.")
     return p.parse_args()
 
 
@@ -91,10 +94,19 @@ def main() -> None:
         test_path = args.test_file
     else:
         data_dir = Path(args.data_dir or task_cfg.get("data_dir", f"data/raw/{args.task}"))
-        candidates = [p for p in sorted(data_dir.glob("*.parquet")) if "test" in p.stem.lower()]
-        if not candidates:
+        all_test_candidates = [p for p in sorted(data_dir.glob("*.parquet")) if "test" in p.stem.lower()]
+        if not all_test_candidates:
             raise FileNotFoundError(f"No test parquet found in {data_dir}")
-        test_path = str(candidates[0])
+
+        preferred = data_dir / f"{args.task.replace('subtask_', 'task_')}_test.parquet"
+        if preferred.exists():
+            test_path = str(preferred)
+        else:
+            non_sample_candidates = [
+                p for p in all_test_candidates if "sample" not in p.stem.lower()
+            ]
+            selected = non_sample_candidates[0] if non_sample_candidates else all_test_candidates[0]
+            test_path = str(selected)
 
     output_path = args.output or f"artifacts/{args.task}/submission.csv"
 
@@ -107,7 +119,12 @@ def main() -> None:
     logger.info("Loading test data: {}", test_path)
     test_ds = load_parquet(test_path)
 
-    ids = test_ds["id"] if "id" in test_ds.column_names else list(range(len(test_ds)))
+    if "ID" not in test_ds.column_names:
+        raise ValueError(
+            f"Missing required 'id' column in test parquet: {test_path}. "
+            "Submission IDs must match the test file IDs."
+        )
+    ids = test_ds["ID"]
 
     tokenized = tokenize_dataset(
         hf_datasets.DatasetDict({"test": test_ds}),
@@ -115,21 +132,51 @@ def main() -> None:
         max_length=args.max_length,
     )
 
-    # Run inference
-    training_args = TrainingArguments(
-        output_dir="/tmp/semeval_predict",
-        per_device_eval_batch_size=args.batch_size,
-        report_to="none",
-    )
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        processing_class=tokenizer,
+    # Run inference with a manual DataLoader loop to reduce Trainer overhead.
+    model = model.to(device)
+    model.eval()
+
+    test_tokenized = tokenized["test"]
+    model_input_columns = [
+        name
+        for name in ("input_ids", "attention_mask", "token_type_ids")
+        if name in test_tokenized.column_names
+    ]
+    drop_columns = [c for c in test_tokenized.column_names if c not in model_input_columns]
+    inference_ds = test_tokenized.remove_columns(drop_columns)
+    inference_ds.set_format(type="torch", columns=model_input_columns)
+
+    collator = DataCollatorWithPadding(tokenizer=tokenizer, pad_to_multiple_of=8)
+    dataloader = DataLoader(
+        inference_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=device.type == "cuda",
+        collate_fn=collator,
     )
 
     logger.info("Running predictions …")
-    output = trainer.predict(tokenized["test"])
-    pred_labels = np.argmax(output.predictions, axis=-1)
+    pred_batches: list[np.ndarray] = []
+    use_autocast = device.type == "cuda"
+    with torch.inference_mode():
+        for batch in tqdm(
+            dataloader,
+            desc="Predicting",
+            total=len(dataloader),
+            unit="batch",
+        ):
+            batch = {k: v.to(device, non_blocking=use_autocast) for k, v in batch.items()}
+            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_autocast):
+                logits = model(**batch).logits
+            pred_batches.append(torch.argmax(logits, dim=-1).cpu().numpy())
+
+    pred_labels = np.concatenate(pred_batches, axis=0)
+    if len(ids) != len(pred_labels):
+        raise RuntimeError(
+            "Prediction count does not match test IDs count: "
+            f"{len(pred_labels)} vs {len(ids)}"
+        )
 
     generate_submission(ids, pred_labels, output_path)
     logger.info("Done — submission written to {}", output_path)

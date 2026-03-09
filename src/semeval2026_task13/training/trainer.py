@@ -8,6 +8,7 @@ import datasets as hf_datasets
 import torch
 from loguru import logger
 from transformers import (
+    DataCollatorWithPadding,
     PreTrainedModel,
     PreTrainedTokenizerBase,
     Trainer,
@@ -55,6 +56,7 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
     output_dir = Path(config.output_dir) / config.task_name
     log_dir = Path(config.log_dir) / config.task_name
     precision = _resolve_precision(config.fp16)
+    optim_name = "adamw_torch_fused" if torch.cuda.is_available() else "adamw_torch"
 
     gc_kwargs = {"use_reentrant": False} if config.gradient_checkpointing else None
 
@@ -62,6 +64,7 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
         output_dir=str(output_dir),
         logging_dir=str(log_dir),
         # Optimiser
+        optim=optim_name,
         learning_rate=config.learning_rate,
         weight_decay=config.weight_decay,
         warmup_ratio=config.warmup_ratio,
@@ -87,6 +90,9 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
         # Logging
         logging_steps=50,
         report_to="none",
+        # Data loading
+        dataloader_num_workers=config.dataloader_num_workers,
+        dataloader_pin_memory=config.dataloader_pin_memory and torch.cuda.is_available(),
     )
 
 
@@ -110,6 +116,10 @@ def build_trainer(
         A configured ``Trainer`` instance.
     """
     training_args = build_training_arguments(config)
+    data_collator = DataCollatorWithPadding(
+        tokenizer=tokenizer,
+        pad_to_multiple_of=8,
+    )
 
     # Convert warmup_ratio -> warmup_steps to avoid deprecation warnings.
     steps_per_epoch = max(
@@ -126,6 +136,7 @@ def build_trainer(
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
+        data_collator=data_collator,
         processing_class=tokenizer,
         compute_metrics=compute_metrics,
     )
