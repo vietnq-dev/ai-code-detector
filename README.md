@@ -1,12 +1,6 @@
 # SemEval-2026 Task 13 — Detecting Machine-Generated Code
 
-Fine-tune `microsoft/codebert-base` for all three subtasks:
-
-| Subtask | Goal | Labels |
-|---------|------|--------|
-| **A** | Binary detection (human vs machine) | 2 |
-| **B** | Multi-class authorship (human + 10 LLM families) | 11 |
-| **C** | Hybrid detection (human / machine / hybrid / adversarial) | 4 |
+Fine-tune `microsoft/codebert-base` for  Subtask A
 
 ## 1) Installation
 
