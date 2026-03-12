@@ -6,6 +6,7 @@ Fine-tune `microsoft/codebert-base` for all three subtasks:
 |---------|------|--------|
 | **A** | Binary detection (human vs machine) | 2 |
 | **B** | Multi-class authorship (human + 10 LLM families) | 11 |
+- **9 Mar**: Download fine-tuned checkpoint (CodeBERT) [here](https://drive.google.com/drive/folders/1wKwwgXW_pC65XJOlL_ogSyxP1Sr9cI26?usp=sharing) (0.34 on leaderboard test).
 | **C** | Hybrid detection (human / machine / hybrid / adversarial) | 4 |
 
 ## 1) Installation
