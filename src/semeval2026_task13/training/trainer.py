@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+import re
 
 import datasets as hf_datasets
 import torch
 from loguru import logger
+from torch import nn
 from transformers import (
     DataCollatorWithPadding,
-    PreTrainedModel,
     PreTrainedTokenizerBase,
     Trainer,
     TrainingArguments,
@@ -17,6 +19,17 @@ from transformers import (
 
 from semeval2026_task13.evaluation.metrics import compute_metrics
 from semeval2026_task13.utils.config import ExperimentConfig
+
+
+def build_run_dir(config: ExperimentConfig) -> Path:
+    """Build a timestamped run directory under the task checkpoint root."""
+    if config.run_dir:
+        return Path(config.run_dir)
+    model_slug = config.model_name.split("/")[-1]
+    model_slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", model_slug).strip("-")
+    stamp = datetime.now().strftime("%Y%m%d%H%M")
+    run_name = f"{model_slug}-{stamp}"
+    return Path(config.output_dir) / config.task_name / run_name
 
 
 def _resolve_precision(requested_fp16: bool) -> dict[str, bool]:
@@ -53,8 +66,8 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
     Returns:
         Fully-populated ``TrainingArguments``.
     """
-    output_dir = Path(config.output_dir) / config.task_name
-    log_dir = Path(config.log_dir) / config.task_name
+    output_dir = build_run_dir(config)
+    log_dir = Path(config.log_dir) / config.task_name / output_dir.name
     precision = _resolve_precision(config.fp16)
     optim_name = "adamw_torch_fused" if torch.cuda.is_available() else "adamw_torch"
 
@@ -73,6 +86,7 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
         per_device_eval_batch_size=config.per_device_eval_batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         num_train_epochs=config.num_train_epochs,
+        max_steps=config.max_steps if config.max_steps is not None else -1,
         # Precision & reproducibility
         fp16=precision["fp16"],
         bf16=precision["bf16"],
@@ -81,12 +95,14 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
         gradient_checkpointing=config.gradient_checkpointing,
         gradient_checkpointing_kwargs=gc_kwargs,
         # Evaluation & checkpointing
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        load_best_model_at_end=True,
+        eval_strategy=config.eval_strategy,
+        save_strategy=config.save_strategy,
+        load_best_model_at_end=config.load_best_model_at_end,
         metric_for_best_model="macro_f1",
         greater_is_better=True,
-        save_total_limit=2,
+        save_total_limit=config.save_total_limit,
+        eval_steps=config.eval_steps,
+        save_steps=config.save_steps,
         # Logging
         logging_steps=50,
         report_to="none",
@@ -97,7 +113,7 @@ def build_training_arguments(config: ExperimentConfig) -> TrainingArguments:
 
 
 def build_trainer(
-    model: PreTrainedModel,
+    model: nn.Module,
     tokenizer: PreTrainedTokenizerBase,
     train_ds: hf_datasets.Dataset,
     eval_ds: hf_datasets.Dataset,

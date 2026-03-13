@@ -1,4 +1,4 @@
-"""Parquet dataset loading and CodeBERT tokenization pipeline."""
+"""Parquet dataset loading and generic tokenizer pipeline."""
 
 from __future__ import annotations
 

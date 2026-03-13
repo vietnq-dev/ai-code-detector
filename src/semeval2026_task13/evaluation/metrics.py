@@ -18,6 +18,15 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     Returns:
         Dictionary ``{"macro_f1": <score>}``.
     """
-    logits, labels = eval_pred
+    preds_raw, labels = eval_pred
+    if isinstance(preds_raw, dict):
+        logits = preds_raw.get("logits")
+    elif isinstance(preds_raw, (tuple, list)):
+        logits = preds_raw[0] if preds_raw else preds_raw
+    else:
+        logits = preds_raw
+
+    logits = np.asarray(logits)
+    labels = np.asarray(labels)
     preds = np.argmax(logits, axis=-1)
     return {"macro_f1": float(f1_score(labels, preds, average="macro"))}

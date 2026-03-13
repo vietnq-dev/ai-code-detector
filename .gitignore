@@ -24,6 +24,8 @@ data
 artifacts
 checkpoints
 logs
+asset
+*.zip
 
 # OS / editor
 .DS_Store

@@ -16,13 +16,15 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
     DataCollatorWithPadding,
 )
 
 from semeval2026_task13.data.dataset import load_parquet, tokenize_dataset
-from semeval2026_task13.models.classifier import get_device
+from semeval2026_task13.models.classifier import (
+    build_tokenizer,
+    get_device,
+    load_model_for_inference,
+)
 from semeval2026_task13.utils.submission import generate_submission
 
 # Quiet noisy third-party loggers
@@ -112,8 +114,8 @@ def main() -> None:
 
     # Load model & tokenizer from merged checkpoint
     logger.info("Loading checkpoint: {}", args.checkpoint)
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
-    model = AutoModelForSequenceClassification.from_pretrained(args.checkpoint)
+    tokenizer = build_tokenizer(args.checkpoint)
+    model = load_model_for_inference(args.checkpoint)
 
     # Load & tokenize test data
     logger.info("Loading test data: {}", test_path)
@@ -168,7 +170,15 @@ def main() -> None:
         ):
             batch = {k: v.to(device, non_blocking=use_autocast) for k, v in batch.items()}
             with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_autocast):
-                logits = model(**batch).logits
+                outputs = model(**batch)
+                if isinstance(outputs, dict):
+                    logits = outputs.get("logits")
+                elif hasattr(outputs, "logits"):
+                    logits = outputs.logits
+                elif isinstance(outputs, (tuple, list)):
+                    logits = outputs[0] if outputs else outputs
+                else:
+                    logits = outputs
             pred_batches.append(torch.argmax(logits, dim=-1).cpu().numpy())
 
     pred_labels = np.concatenate(pred_batches, axis=0)

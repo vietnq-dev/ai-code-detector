@@ -1,13 +1,9 @@
 # SemEval-2026 Task 13 — Detecting Machine-Generated Code
 
-Fine-tune `microsoft/codebert-base` for all three subtasks:
+This project trains **binary AI-code detection** models (`num_labels: 2`) using either:
 
-| Subtask | Goal | Labels |
-|---------|------|--------|
-| **A** | Binary detection (human vs machine) | 2 |
-| **B** | Multi-class authorship (human + 10 LLM families) | 11 |
-- **9 Mar**: Download fine-tuned checkpoint (CodeBERT) [here](https://drive.google.com/drive/folders/1wKwwgXW_pC65XJOlL_ogSyxP1Sr9cI26?usp=sharing) (0.34 on leaderboard test).
-| **C** | Hybrid detection (human / machine / hybrid / adversarial) | 4 |
+- `microsoft/codebert-base`
+- `project-droid/DroidDetect-Base` (with CE + batch-hard triplet objective)
 
 ## 1) Installation
 
@@ -26,7 +22,7 @@ curl -L -o semeval-2026-task13.zip\
   https://www.kaggle.com/api/v1/datasets/download/daniilor/semeval-2026-task13
 ```
 
-Place official `.parquet` files under `data/task_<x>/`.
+Place official `.parquet` files under `data/task_a/`.
 
 The loader auto-discovers files by keyword (`train`, `validation`, `test`)
 so the organiser naming convention works out of the box:
@@ -36,26 +32,21 @@ data/task_a/
   task_a_training_set_1.parquet
   task_a_validation_set.parquet
   task_a_test_set_sample.parquet
-data/task_b/
-  ...
-data/task_c/
-  ...
 ```
 
 Each parquet must have at least a `code` column and a `label` column
-(integer label ID). Test files should include an `id` column.
+(integer label ID). Test files should include an `ID` column.
 
 ## 3) Training
 
+This repository is configured for **binary detection** (`num_labels: 2`).
+
 ```bash
-# Subtask A (binary)
+# Binary training with CodeBERT (default)
 uv run python train.py --task subtask_a
 
-# Subtask B (11-class)
-uv run python train.py --task subtask_b
-
-# Subtask C (4-class)
-uv run python train.py --task subtask_c
+# Binary training with DroidDetect-Base + TL head
+uv run python train.py --task subtask_a --model-config configs/model/droiddetect-base.yaml
 ```
 
 Checkpoints are saved to `checkpoints/<task>/` (best model in
@@ -66,9 +57,9 @@ Checkpoints are saved to `checkpoints/<task>/` (best model in
 ```bash
 uv run python predict.py \
   --task subtask_a \
-  --checkpoint checkpoints/subtask_a/best \
+  --checkpoint checkpoints/subtask_a/DroidDetect-Base-202603130715/checkpoint-15625 \
   --test-file data/task_a/task_a_test.parquet \
-  --output artifacts/subtask_a/submission.csv
+  --output artifacts/subtask_a/submission-droid-detect.csv
 ```
 
 Writes `artifacts/subtask_a/submission.csv` with columns `id,label`.
@@ -77,10 +68,10 @@ Override paths as needed:
 
 ```bash
 uv run python predict.py \
-    --task subtask_b \
-    --checkpoint checkpoints/subtask_b/best \
-    --test-file data/raw/subtask_b/test.parquet \
-    --output artifacts/subtask_b/submission.csv \
+  --task subtask_a \
+  --checkpoint checkpoints/subtask_a/best \
+  --test-file data/task_a/task_a_test.parquet \
+  --output artifacts/subtask_a/submission-droid-detect.csv \
     --batch-size 64
 ```
 
@@ -93,17 +84,14 @@ uv run python predict.py \
 ├── pyproject.toml
 ├── configs/
 │   ├── model/
-│   │   └── codebert-base.yaml  # Model & training defaults
-│   └── tasks/
-│       ├── subtask_a.yaml
-│       ├── subtask_b.yaml
-│       └── subtask_c.yaml
-├── data/task_{a,b,c}/          # Official .parquet files
+│   │   ├── codebert-base.yaml
+│   │   └── droiddetect-base.yaml
+├── data/task_a/                # Official .parquet files
 ├── src/semeval2026_task13/
 │   ├── data/
 │   │   └── dataset.py          # Parquet loading & tokenization
 │   ├── models/
-│   │   └── classifier.py       # CodeBERT model builder
+│   │   └── classifier.py       # CodeBERT + DroidDetect model builder
 │   ├── training/
 │   │   └── trainer.py          # HF Trainer factory
 │   ├── evaluation/

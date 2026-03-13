@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Fine-tune CodeBERT for SemEval-2026 Task 13 (any subtask)."""
+"""Fine-tune a HuggingFace code model for SemEval-2026 Task 13."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from loguru import logger
 
 from semeval2026_task13.data.dataset import load_splits, tokenize_dataset
 from semeval2026_task13.models.classifier import build_model, build_tokenizer, get_device
-from semeval2026_task13.training.trainer import build_trainer
+from semeval2026_task13.training.trainer import build_run_dir, build_trainer
 from semeval2026_task13.utils.config import ExperimentConfig
 
 # Quiet noisy third-party loggers
@@ -62,6 +62,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-dir", default=None, help="Override data directory.")
     p.add_argument("--output-dir", default=None, help="Override checkpoint root.")
     p.add_argument("--epochs", type=int, default=1)
+    p.add_argument("--max-steps", type=int, default=None)
     p.add_argument("--batch-size", type=int, default=None)
     p.add_argument("--lr", type=float, default=None)
     p.add_argument("--max-length", type=int, default=None)
@@ -92,6 +93,8 @@ def main() -> None:
         overrides["learning_rate"] = args.lr
     if args.max_length is not None:
         overrides["max_length"] = args.max_length
+    if args.max_steps is not None:
+        overrides["max_steps"] = args.max_steps
     if args.grad_accum is not None:
         overrides["gradient_accumulation_steps"] = args.grad_accum
     if args.seed is not None:
@@ -104,6 +107,8 @@ def main() -> None:
         overrides["quantize_4bit"] = False
 
     config = ExperimentConfig.from_yaml(args.model_config, task_cfg_path, **overrides)
+    run_dir = build_run_dir(config)
+    config.run_dir = str(run_dir)
     log_path = setup_logging(config.task_name)
     logger.info("Logging to {}", log_path)
 
@@ -131,7 +136,7 @@ def main() -> None:
     trainer.train()
 
     # ---- persist best model ----------------------------------------------
-    best_dir = Path(config.output_dir) / config.task_name / "best"
+    best_dir = Path(config.run_dir) / "best"
 
     trained_model = trainer.model
     if hasattr(trained_model, "merge_and_unload"):

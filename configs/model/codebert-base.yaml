@@ -1,10 +1,11 @@
 model_name: microsoft/codebert-base
+num_labels: 2
 max_length: 256
 
 # Training defaults (override via CLI or task config)
 learning_rate: 2.0e-5
 per_device_train_batch_size: 64
-per_device_eval_batch_size: 512
+per_device_eval_batch_size: 4096
 num_train_epochs: 1
 weight_decay: 0.01
 warmup_ratio: 0.1
